@@ -41,3 +41,23 @@ class MediaInfoHandler:
         if audio.pictures:
             return Image.open(BytesIO(audio.pictures[0].data))
         return None
+    
+    @staticmethod
+    def extract_synchronized_lyrics(file_path):
+        if file_path.lower().endswith('.mp3'):
+            audio = MP3(file_path, ID3=ID3)
+            if 'SYLT::' in audio:
+                return MediaInfoHandler.parse_sylt_frame(audio['SYLT::'])
+        return []
+
+    @staticmethod
+    def parse_sylt_frame(sylt_frame):
+        # Parse the SYLT frame to extract synchronized lyrics
+        # This is a simplistic parser; adjust based on the actual format
+        lyrics = []
+        for line in sylt_frame.text.split('\n'):
+            parts = line.split(' ', 1)
+            if len(parts) == 2:
+                time, text = parts
+                lyrics.append((int(time), text))
+        return lyrics

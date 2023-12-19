@@ -2,6 +2,7 @@ from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
 
 class LyricsHandler:
+    # For loading and displaying lyrics from a file in the music player
     @staticmethod
     def extract_lyrics(file_path):
         if not file_path:
@@ -29,3 +30,13 @@ class LyricsHandler:
 
         return lyrics
 
+    @staticmethod
+    def parse_sylt_frame(sylt_frame):
+        # This is a simplistic parser; you may need to adjust it based on the actual format
+        lyrics = []
+        for line in sylt_frame.data.decode('utf-8').split('\n'):
+            parts = line.split(' ')
+            if len(parts) >= 2:
+                time, text = parts[0], ' '.join(parts[1:])
+                lyrics.append((int(time), text))
+        return lyrics

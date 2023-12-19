@@ -65,6 +65,12 @@ class MusicPlayer(ttk.Frame):
             self.song_info.config(text=f"Song: {song_name}")
             self.update_album_art_ui(album_art_image)
             self.update_lyrics_display()
+        
+        # Extract and store synchronized lyrics
+        self.synchronized_lyrics = MediaInfoHandler.extract_synchronized_lyrics(self.current_song)
+        
+        # Update the initial lyrics display
+        self.update_lyrics_display()
 
     def update_album_art_ui(self, album_art_image):
         self.album_cover_label.image = None
