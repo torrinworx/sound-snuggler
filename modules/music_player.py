@@ -47,6 +47,7 @@ class MusicPlayer(ttk.Frame):
         self.lyrics_display = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=40, height=10)
         self.lyrics_display.pack(pady=10)
 
+    # Media Handling
     def load_song(self):
         song_path = filedialog.askopenfilename(filetypes=[("Audio Files", "*.mp3 *.flac")])
         if song_path:
@@ -57,6 +58,7 @@ class MusicPlayer(ttk.Frame):
             self.time_slider.configure(to=media.get_duration() / 1000)
             self.update_song_info()
 
+    # UI Update Methods
     def update_song_info(self):
         if self.current_song:
             song_name, album_art_image = MediaInfoHandler.get_song_info(self.current_song)
@@ -77,16 +79,6 @@ class MusicPlayer(ttk.Frame):
         self.lyrics_display.delete(1.0, tk.END)
         self.lyrics_display.insert(tk.END, lyrics if lyrics else "Lyrics not available.")
 
-    def toggle_play_pause(self):
-        if self.current_song:
-            if self.is_playing:
-                self.player.pause()
-            else:
-                self.player.play()
-            self.is_playing = not self.is_playing
-            self.play_pause_button.config(image=self.pause_icon if self.is_playing else self.play_icon)
-            self.update_progress()
-
     def update_progress(self):
         if self.current_song:
             try:
@@ -99,6 +91,17 @@ class MusicPlayer(ttk.Frame):
                     self.after(1000, self.update_progress)
             except Exception as e:
                 print(f"Error in update_progress: {e}")
+
+    # Player Control Methods
+    def toggle_play_pause(self):
+        if self.current_song:
+            if self.is_playing:
+                self.player.pause()
+            else:
+                self.player.play()
+            self.is_playing = not self.is_playing
+            self.play_pause_button.config(image=self.pause_icon if self.is_playing else self.play_icon)
+            self.update_progress()
 
     def on_slider_move(self, value):
         self.is_slider_active = True
@@ -115,6 +118,7 @@ class MusicPlayer(ttk.Frame):
             current_time = self.player.get_time() / 1000
             self.time_slider.set(current_time)
 
+    # Utility Methods
     def format_time(self, seconds):
         minutes = int(seconds // 60)
         seconds = int(seconds % 60)
