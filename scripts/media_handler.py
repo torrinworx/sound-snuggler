@@ -80,7 +80,7 @@ class MediaInfoHandler:
         try:
             print(f"Converting {source_file_path} to MP3...")
             subprocess.run(
-                ['ffmpeg', '-i', source_file_path, '-ab', bitrate, target_file_path],
+                ['ffmpeg', '-y', '-i', source_file_path, '-ab', bitrate, target_file_path], # -y flag allows for overwriting existing files if found without y/N intervention
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

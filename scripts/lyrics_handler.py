@@ -1,6 +1,8 @@
+import re
+
 import syncedlyrics
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, USLT
+from mutagen.id3 import ID3
 
 class LyricsHandler:
     # For retreiving lyrics from a file
@@ -37,44 +39,16 @@ class LyricsHandler:
         try:
             lrc = syncedlyrics.search(f"{track_name} {artist_name}")
             if lrc:
-                return lrc
+                # Process the lyrics to remove time codes
+                lines = lrc.split('\n')
+                cleaned_lyrics = []
+                for line in lines:
+                    # Remove the timestamp using a regular expression
+                    cleaned_line = re.sub(r'\[.*?\]', '', line).strip()
+                    if cleaned_line:
+                        cleaned_lyrics.append(cleaned_line)
+                return lrc, '\n'.join(cleaned_lyrics)  # Return both synced and unsynced lyrics
             else:
-                return "Lyrics not found."
+                return "Lyrics not found.", ""
         except Exception as e:
-            return f"An error occurred: {e}"
-
-    # Method to format lyrics for LRC
-    @staticmethod
-    def format_lyrics_for_lrc(json_data):
-        lyrics = ""
-        for segment in json_data['segments']:
-            time_stamp = LyricsHandler.convert_timestamp(segment['start'])
-            line = f"[{time_stamp}]{segment['text']}\n"
-            lyrics += line
-        return lyrics
-
-    # Method to convert timestamps
-    @staticmethod
-    def convert_timestamp(seconds):
-        m, s = divmod(seconds, 60)
-        return f"{int(m):02d}:{s:05.2f}"
-
-    # Method to embed lyrics into an MP3 file
-    @staticmethod
-    def embed_lyrics_to_mp3(mp3_path, lyrics):
-        audio = MP3(mp3_path, ID3=ID3)
-        audio.tags.add(USLT(encoding=3, lang=u'eng', desc=u'desc', text=lyrics))
-        audio.save()
-    
-    # Example methods for displaying synchronized lyrics
-    @staticmethod
-    def parse_sylt_frame(sylt_frame):
-        # This is a simplistic parser; may need to adjust it based on the actual format
-        lyrics = []
-        for line in sylt_frame.data.decode('utf-8').split('\n'):
-            parts = line.split(' ')
-            if len(parts) >= 2:
-                time, text = parts[0], ' '.join(parts[1:])
-                lyrics.append((int(time), text))
-        return lyrics
-    
+            return f"An error occurred: {e}", ""

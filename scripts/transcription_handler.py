@@ -1,4 +1,6 @@
+import re
 import json
+
 import torch
 import stable_whisper
 from lyrics_handler import LyricsHandler
@@ -33,14 +35,15 @@ class TranscriptionHandler:
         track_name, artist_name, _ = MediaInfoHandler.get_track_info(file_path)
 
         print(f"Fetching lyrics for {track_name} by {artist_name}...")
-        lyrics = LyricsHandler.fetch_lyrics(track_name, artist_name)
+        synced_lyrics, cleaned_lyrics = LyricsHandler.fetch_lyrics(track_name, artist_name)
 
-        if lyrics:
-            return self._align_and_transcribe(file_path, lyrics)
+        if cleaned_lyrics:
+            return self._align_and_transcribe(file_path, cleaned_lyrics)
         else:
             return self._transcribe(file_path)
 
     def _convert_if_flac(self, file_path):
+        # Flac files do not support embeded lyrics to my knowledge.
         if file_path.lower().endswith('.flac'):
             print("FLAC file detected. Starting conversion to MP3...")
             mp3_path = file_path.rsplit('.', 1)[0] + '.mp3'
@@ -60,18 +63,71 @@ class TranscriptionHandler:
         # Manually specify the path if save_as_json doesn't return it
         json_path = 'audio.json'
         result.save_as_json(json_path)
+        result.to_srt_vtt('audio.srt', segment_level=False)
+        result.to_srt_vtt('audio.vtt', segment_level=False)
+        
+        srt_path = 'audio.srt'
+        self._convert_srt_to_lrc(srt_path, 'audio.lrc')
+        self._convert_srt_to_enhanced_lrc(srt_path, 'audio.enhanced.lrc')
 
-        # Load the JSON data
-        with open(json_path, 'r') as file:
-            json_data = json.load(file)
+    def _clean_lyrics(self, line):
+        # Remove HTML tags and additional timestamps
+        line = re.sub(r'<[^>]+>', '', line)
+        line = re.sub(r'\[\d{2}:\d{2}\.\d{2}\]', '', line)
+        return line.strip()
 
-        # Format the lyrics for LRC
-        formatted_lyrics = LyricsHandler.format_lyrics_for_lrc(json_data)
+    def _convert_srt_to_lrc(self, srt_path, lrc_path):
+        with open(srt_path, 'r', encoding='utf-8') as srt_file:
+            srt_lines = srt_file.readlines()
 
-        # Embed the lyrics into the MP3 file
-        LyricsHandler.embed_lyrics_to_mp3(file_path, formatted_lyrics)
+        with open(lrc_path, 'w', encoding='utf-8') as lrc_file:
+            for line in srt_lines:
+                if '-->' in line:
+                    start_time = line.split('-->')[0].strip()
+                    # Convert time format from 'HH:MM:SS,MS' to 'MM:SS.xx'
+                    h, m, s_ms = start_time.split(':')
+                    s, ms = s_ms.split(',')
+                    lrc_time = f"[{int(m):02d}:{int(s):02d}.{int(ms)//10:02d}]"
+                elif line.strip() and not line.strip().isdigit():
+                    clean_line = self._clean_lyrics(line)
+                    if clean_line:  # Ensure the line is not empty and cleaned
+                        lrc_file.write(f"{lrc_time} {clean_line}\n")
 
-        return json_path
+    def _convert_srt_to_enhanced_lrc(self, srt_path, lrc_path):
+        with open(srt_path, 'r', encoding='utf-8') as srt_file:
+            srt_lines = srt_file.readlines()
+
+        lrc_start_time, lrc_end_time = "", ""
+        current_lyric_lines = []
+        with open(lrc_path, 'w', encoding='utf-8') as lrc_file:
+            for line in srt_lines:
+                if '-->' in line:
+                    # If there are lyrics accumulated from previous, write them before starting a new timestamp
+                    if current_lyric_lines:
+                        for lyric_line in current_lyric_lines:
+                            lrc_file.write(f"{lrc_start_time}{lyric_line}{lrc_end_time}\n")
+                        current_lyric_lines = []
+
+                    times = line.split('-->')
+                    start_time = times[0].strip()
+                    end_time = times[1].strip()
+
+                    # Convert start and end times to LRC format
+                    start_h, start_m, start_s_ms = start_time.split(':')
+                    start_s, start_ms = start_s_ms.split(',')
+                    end_h, end_m, end_s_ms = end_time.split(':')
+                    end_s, end_ms = end_s_ms.split(',')
+
+                    lrc_start_time = f"[{int(start_m):02d}:{int(start_s):02d}.{int(start_ms)//10:02d}]"
+                    lrc_end_time = f"[{int(end_m):02d}:{int(end_s):02d}.{int(end_ms)//10:02d}]"
+                elif line.strip() and not line.strip().isdigit():
+                    clean_line = self._clean_lyrics(line)
+                    if clean_line:  # Add cleaned line to the current lyric lines
+                        current_lyric_lines.append(clean_line)
+
+            # Write any remaining lyrics after the loop ends
+            for lyric_line in current_lyric_lines:
+                lrc_file.write(f"{lrc_start_time}{lyric_line}{lrc_end_time}\n")
 
     def _transcribe(self, file_path):
         print("Lyrics not found. Starting transcription without alignment...")
@@ -85,13 +141,8 @@ class TranscriptionHandler:
         # Load the JSON data
         with open(json_path, 'r') as file:
             json_data = json.load(file)
-
-        # Format the lyrics for LRC
-        formatted_lyrics = LyricsHandler.format_lyrics_for_lrc(json_data)
-
-        # Embed the lyrics into the MP3 file
-        LyricsHandler.embed_lyrics_to_mp3(file_path, formatted_lyrics)
-
+        
+        # TODO: Remove json from local directory, look into way to make it a temp file
         return json_path
 
 # Example usage
