@@ -1,8 +1,10 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
+
 from PIL import Image, ImageTk
-import syncedlyrics
-from .media_info_handler import MediaInfoHandler
+
+from scripts.media_handler import MediaInfoHandler
+from scripts.lyrics_handler import LyricsHandler
 
 class LyricsSynchronizer(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -61,24 +63,14 @@ class LyricsSynchronizer(tk.Frame):
         file_path = filedialog.askopenfilename(filetypes=[("MP3 Files", "*.mp3"), ("FLAC Files", "*.flac")])
         if file_path:
             try:
-                song_name, album_art_image = MediaInfoHandler.get_song_info(file_path)
+                song_name, album_art_image = MediaInfoHandler.get_track_info(file_path)
                 self.album_info_var.set(f"Song: {song_name}")
                 if album_art_image:
                     self.display_album_art(album_art_image, self.album_art_frame)
 
-                self.fetch_lyrics(song_name, '')  # Assuming artist name is not available
+                LyricsHandler.fetch_lyrics(song_name, '')  # Assuming artist name is not available
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred while processing the music file: {e}")
-
-    def fetch_lyrics(self, track_name, artist_name):
-        try:
-            lrc = syncedlyrics.search(f"{track_name} {artist_name}")
-            if lrc:
-                self.display_lyrics(lrc)
-            else:
-                messagebox.showinfo("Info", "Lyrics not found.")
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred: {e}")
 
     def set_download_path(self):
         download_path = filedialog.askdirectory()

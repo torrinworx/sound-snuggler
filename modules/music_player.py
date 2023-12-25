@@ -3,8 +3,8 @@ from tkinter import ttk, filedialog, scrolledtext
 import vlc
 from PIL import Image, ImageTk
 
-from .lyrics_handler import LyricsHandler
-from .media_info_handler import MediaInfoHandler
+from scripts.lyrics_handler import LyricsHandler
+from scripts.media_handler import MediaInfoHandler
 
 class MusicPlayer(ttk.Frame):
     def __init__(self, parent):
@@ -61,7 +61,7 @@ class MusicPlayer(ttk.Frame):
     # UI Update Methods
     def update_song_info(self):
         if self.current_song:
-            song_name, album_art_image = MediaInfoHandler.get_song_info(self.current_song)
+            song_name, album_art_image = MediaInfoHandler.get_track_info(self.current_song)
             self.song_info.config(text=f"Song: {song_name}")
             self.update_album_art_ui(album_art_image)
             self.update_lyrics_display()

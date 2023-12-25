@@ -1,5 +1,4 @@
 import tkinter as tk
-from tkinter import filedialog
 
 from modules.music_player import MusicPlayer
 from modules.lyrics_synchronizer import LyricsSynchronizer
@@ -46,11 +45,6 @@ class MainApplication(tk.Tk):
             self.current_view = self.lyrics_synchronizer
 
         self.current_view.pack(fill="both", expand=True, pady=(0, 20))  # Add padding at the bottom
-
-    def open_lyrics_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Lyrics Files", "*.lrc")])
-        if file_path:
-            self.lyrics_synchronizer.load_lyrics_file(file_path)
 
 if __name__ == "__main__":
     app = MainApplication()
