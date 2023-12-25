@@ -102,32 +102,37 @@ class TranscriptionHandler:
         with open(lrc_path, 'w', encoding='utf-8') as lrc_file:
             for line in srt_lines:
                 if '-->' in line:
-                    # If there are lyrics accumulated from previous, write them before starting a new timestamp
-                    if current_lyric_lines:
-                        for lyric_line in current_lyric_lines:
-                            lrc_file.write(f"{lrc_start_time}{lyric_line}{lrc_end_time}\n")
-                        current_lyric_lines = []
+                    # Write previous lyrics if any
+                    self._write_lyrics(lrc_file, current_lyric_lines, lrc_start_time, lrc_end_time)
+                    current_lyric_lines = []
 
-                    times = line.split('-->')
-                    start_time = times[0].strip()
-                    end_time = times[1].strip()
-
-                    # Convert start and end times to LRC format
-                    start_h, start_m, start_s_ms = start_time.split(':')
-                    start_s, start_ms = start_s_ms.split(',')
-                    end_h, end_m, end_s_ms = end_time.split(':')
-                    end_s, end_ms = end_s_ms.split(',')
-
-                    lrc_start_time = f"[{int(start_m):02d}:{int(start_s):02d}.{int(start_ms)//10:02d}]"
-                    lrc_end_time = f"[{int(end_m):02d}:{int(end_s):02d}.{int(end_ms)//10:02d}]"
+                    lrc_start_time, lrc_end_time = self._parse_srt_times(line)
                 elif line.strip() and not line.strip().isdigit():
                     clean_line = self._clean_lyrics(line)
-                    if clean_line:  # Add cleaned line to the current lyric lines
+                    if clean_line:
                         current_lyric_lines.append(clean_line)
 
             # Write any remaining lyrics after the loop ends
-            for lyric_line in current_lyric_lines:
-                lrc_file.write(f"{lrc_start_time}{lyric_line}{lrc_end_time}\n")
+            self._write_lyrics(lrc_file, current_lyric_lines, lrc_start_time, lrc_end_time)
+
+    def _parse_srt_times(self, line):
+        times = line.split('-->')
+        start_time = times[0].strip()
+        end_time = times[1].strip()
+
+        lrc_start_time = self._convert_time_to_lrc_format(start_time)
+        lrc_end_time = self._convert_time_to_lrc_format(end_time)
+
+        return lrc_start_time, lrc_end_time
+
+    def _convert_time_to_lrc_format(self, time_str):
+        h, m, s_ms = time_str.split(':')
+        s, ms = s_ms.split(',')
+        return f"[{int(m):02d}:{int(s):02d}.{int(ms)//10:02d}]"
+
+    def _write_lyrics(self, lrc_file, lyric_lines, start_time, end_time):
+        for lyric_line in lyric_lines:
+            lrc_file.write(f"{start_time}{lyric_line}{end_time}\n")
 
     def _transcribe(self, file_path):
         print("Lyrics not found. Starting transcription without alignment...")
