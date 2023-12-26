@@ -39,3 +39,8 @@ py ./main.py
 - **Enhanced Transcription Accuracy:** Investigate [stable-ts](https://github.com/jianfch/stable-ts) for improved timestamped transcription in ELRC lyrics.
 - **Speaker Diarization Integration:** Explore combining Whisper's capabilities with speaker diarization tools for complex audio files. This integration would help in identifying not only the timing of the words but also the speaker, particularly in songs with multiple vocalists. More details can be found in this [discussion on Hugging Face](https://huggingface.co/spaces/openai/whisper/discussions/29).
 - **Animated Album Art Integration:** Implement functionality to use the [Apple Music Animated Artwork Fetcher](https://github.com/bunnykek/Apple-Music-Animated-Artwork-Fetcher) for retrieving and embedding animated album art into songs.
+
+## Requirements:
+- ffmpeg
+- vlc
+- torch version, cpu, rocm, or cuda, depending on your hardware: https://pytorch.org/get-started/locally/ (Still need to automate this installation/setup with a script or something)

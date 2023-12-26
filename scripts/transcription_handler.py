@@ -1,10 +1,13 @@
 import re
-import json
 
 import torch
 import stable_whisper
+from mutagen.mp3 import MP3
+from mutagen.id3 import ID3, USLT, SYLT, Encoding
+
 from lyrics_handler import LyricsHandler
 from media_handler import MediaInfoHandler
+
 
 class TranscriptionHandler:
     def __init__(self, model_name='large', download_root='./models'):
@@ -38,9 +41,16 @@ class TranscriptionHandler:
         synced_lyrics, cleaned_lyrics = LyricsHandler.fetch_lyrics(track_name, artist_name)
 
         if cleaned_lyrics:
-            return self._align_and_transcribe(file_path, cleaned_lyrics)
+            self._align_and_transcribe(file_path, cleaned_lyrics)
         else:
-            return self._transcribe(file_path)
+            self._transcribe(file_path)
+
+        # Check if the file is an MP3 (after potential FLAC conversion)
+        if file_path.lower().endswith('.mp3'):
+            enhanced_lrc_path = 'audio.enhanced.lrc'
+            self.embed_lyrics(file_path, enhanced_lrc_path)
+        else:
+            print("Embedding lyrics is only supported for MP3 files.")
 
     def _convert_if_flac(self, file_path):
         # Flac files do not support embeded lyrics to my knowledge.
@@ -70,6 +80,21 @@ class TranscriptionHandler:
         self._convert_srt_to_lrc(srt_path, 'audio.lrc')
         self._convert_srt_to_enhanced_lrc(srt_path, 'audio.enhanced.lrc')
 
+    def _transcribe(self, file_path):
+        print("Lyrics not found. Starting transcription without alignment...")
+        result = self.model.transcribe(file_path)
+        print("Transcription completed. Saving result as JSON...")
+        
+        # Manually specify the path if save_as_json doesn't return it
+        json_path = 'audio.json'
+        result.save_as_json(json_path)
+        result.to_srt_vtt('audio.srt', segment_level=False)
+        result.to_srt_vtt('audio.vtt', segment_level=False)
+        
+        srt_path = 'audio.srt'
+        self._convert_srt_to_lrc(srt_path, 'audio.lrc')
+        self._convert_srt_to_enhanced_lrc(srt_path, 'audio.enhanced.lrc')
+    
     def _clean_lyrics(self, line):
         # Remove HTML tags and additional timestamps
         line = re.sub(r'<[^>]+>', '', line)
@@ -134,23 +159,74 @@ class TranscriptionHandler:
         for lyric_line in lyric_lines:
             lrc_file.write(f"{start_time}{lyric_line}{end_time}\n")
 
-    def _transcribe(self, file_path):
-        print("Lyrics not found. Starting transcription without alignment...")
-        result = self.model.transcribe(file_path)
-        print("Transcription completed. Saving result as JSON...")
-        
-        # Manually specify the path if save_as_json doesn't return it
-        json_path = 'audio.json'
-        result.save_as_json(json_path)
+    def embed_lyrics(self, mp3_path, enhanced_lrc_path):
+        print(f"Embedding lyrics into {mp3_path}...")
 
-        # Load the JSON data
-        with open(json_path, 'r') as file:
-            json_data = json.load(file)
-        
-        # TODO: Remove json from local directory, look into way to make it a temp file
-        return json_path
+        # Load the MP3 file
+        audio = MP3(mp3_path, ID3=ID3)
+
+        # # Ensure that ID3 tags exist
+        # try:
+        #     audio.add_tags()
+        # except mutagen.id3.error:
+        #     pass  # ID3 tags already exist
+
+        # Read the enhanced LRC file
+        with open(enhanced_lrc_path, 'r', encoding='utf-8') as lrc_file:
+            enhanced_lrc = lrc_file.read()
+
+        # Add the USLT tag (Unsynchronized lyrics)
+        audio.tags.add(USLT(encoding=Encoding.UTF8, lang='eng', desc='enhanced', text=enhanced_lrc))
+
+        # Add the SYLT tag (Synchronized lyrics)
+        # Note: You need to convert the LRC format to a format compatible with SYLT
+        # This is a simplified example, you will need to implement the conversion logic
+        sylt_lyrics = self._convert_lrc_to_sylt_format(enhanced_lrc)
+        audio.tags.add(SYLT(encoding=Encoding.UTF8, lang='eng', format=2, type=1, desc='enhanced', text=sylt_lyrics))
+
+        # Save the tags
+        audio.save()
+        print(f"Lyrics embedded into {mp3_path} successfully.")
+    
+    def _convert_lrc_to_sylt_format(self, lrc_content):
+        """
+        Converts enhanced LRC content to SYLT format.
+        SYLT expects a byte string where each syllable (or word) is followed by its timestamp.
+        """
+        sylt_data = []
+
+        for line in lrc_content.splitlines():
+            # Parse the LRC line format: [mm:ss.xx] lyrics
+            parts = line.split(']', 1)
+            if len(parts) < 2:
+                continue  # Skip invalid lines
+
+            timestamp, lyrics = parts
+            timestamp = timestamp.strip('[')
+            lyrics = lyrics.strip()
+
+            # Convert timestamp to milliseconds
+            time_parts = timestamp.split(':')
+            minutes, seconds = int(time_parts[0]), float(time_parts[1])
+            total_milliseconds = int((minutes * 60 + seconds) * 1000)
+
+            # Add each word with its timestamp
+            for word in lyrics.split():
+                # SYLT format: (lyric, timestamp, duration, is_last_syllable)
+                # Here, we assume each word is a separate syllable and lasts for the entire line duration
+                sylt_data.append((word, total_milliseconds, 0, False))
+
+        # Convert the data to the byte string format required by SYLT
+        sylt_bytes = b''
+        for word, start_time, duration, is_last in sylt_data:
+            sylt_bytes += word.encode('utf-8') + b'\x00'  # Null-terminated UTF-8 string
+            sylt_bytes += start_time.to_bytes(4, 'big')  # Timestamp in milliseconds, big-endian
+            sylt_bytes += duration.to_bytes(3, 'big')  # Duration in milliseconds, big-endian
+            sylt_bytes += (1 if is_last else 0).to_bytes(1, 'big')  # Last syllable flag
+
+        return sylt_bytes
 
 # Example usage
-flac_file_path = "C:\\Users\\torri\\Downloads\\_American Idiot (2004)\\Green Day - American Idiot - 10 - Letterbomb.flac"
+flac_file_path = "./Green Day - American Idiot - 10 - Letterbomb.flac"
 transcription_handler = TranscriptionHandler()
 transcription_handler.convert_and_transcribe(flac_file_path)
