@@ -61,7 +61,7 @@ class MusicPlayer(ttk.Frame):
     # UI Update Methods
     def update_song_info(self):
         if self.current_song:
-            song_name, album_art_image = MediaInfoHandler.get_track_info(self.current_song)
+            song_name, artist_name, album_art_image = MediaInfoHandler.get_track_info(self.current_song)
             self.song_info.config(text=f"Song: {song_name}")
             self.update_album_art_ui(album_art_image)
             self.update_lyrics_display()
