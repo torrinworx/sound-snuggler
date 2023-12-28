@@ -4,7 +4,7 @@ import torch
 import mutagen
 import stable_whisper
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, USLT, SYLT, Encoding, 
+from mutagen.id3 import ID3, USLT, SYLT, Encoding
 
 from lyrics_handler import LyricsHandler
 from media_handler import MediaInfoHandler
@@ -49,7 +49,7 @@ class TranscriptionHandler:
         # Check if the file is an MP3 (after potential FLAC conversion)
         if file_path.lower().endswith('.mp3'):
             enhanced_lrc_path = 'audio.enhanced.lrc'
-            self.embed_lyrics(file_path, enhanced_lrc_path)
+            self.embed_lyrics(file_path, enhanced_lrc_path, cleaned_lyrics)
         else:
             print("Embedding lyrics is only supported for MP3 files.")
 
@@ -160,7 +160,7 @@ class TranscriptionHandler:
         for lyric_line in lyric_lines:
             lrc_file.write(f"{start_time}{lyric_line}{end_time}\n")
 
-    def embed_lyrics(self, mp3_path, enhanced_lrc_path):
+    def embed_lyrics(self, mp3_path, enhanced_lrc_path, cleaned_lyrics):
         print(f"Embedding lyrics into {mp3_path}...")
 
         # Load the MP3 file
@@ -176,7 +176,7 @@ class TranscriptionHandler:
 
         # Add or update the USLT tag (Unsynchronized lyrics)
         audio.tags.delall('USLT')
-        audio.tags.add(USLT(encoding=Encoding.UTF8, lang='eng', desc='enhanced', text=enhanced_lrc))
+        audio.tags.add(USLT(encoding=Encoding.UTF8, lang='eng', desc='enhanced', text=cleaned_lyrics))
 
         # Add or update the SYLT tag (Synchronized lyrics)
         sylt_lyrics = self._convert_lrc_to_sylt_format(enhanced_lrc)

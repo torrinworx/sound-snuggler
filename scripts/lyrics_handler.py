@@ -1,13 +1,12 @@
 import re
-
 import syncedlyrics
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
 
 class LyricsHandler:
-    # For retreiving lyrics from a file
+    # For retrieving lyrics embedded in a music file
     @staticmethod
-    def extract_lyrics(file_path):
+    def get_embedded_lyrics_from_file(file_path):
         if not file_path:
             return "No song loaded."
 
@@ -15,17 +14,19 @@ class LyricsHandler:
         try:
             if file_path.lower().endswith('.mp3'):
                 audio = MP3(file_path, ID3=ID3)
-                # Check for unsynchronized lyrics
-                if 'USLT::' in audio:
-                    lyrics = audio['USLT::'].text
-                # Check for synchronized lyrics
-                elif 'SYLT::' in audio:
-                    # TODO: This is a more complex case, as you need to parse the synchronized lyrics
-                    # Here, we just return the raw data, need to implement a parser
-                    lyrics = str(audio['SYLT::'].data)
+
+                # Print all tag keys for diagnostic purposes
+                print("Available tags in the file:", audio.keys())
+
+                # Retrieve unsynchronized lyrics (USLT) if available
+                lyrics = LyricsHandler._get_uslt_lyrics(audio)
+
+                # If USLT not found, try retrieving synchronized lyrics (SYLT)
+                if lyrics == "Lyrics not available.":
+                    lyrics = LyricsHandler._get_sylt_lyrics(audio)
 
             elif file_path.lower().endswith('.flac'):
-                # Add logic for FLAC files if necessary
+                # Future implementation for FLAC files
                 pass
 
         except Exception as e:
@@ -33,22 +34,35 @@ class LyricsHandler:
 
         return lyrics
 
-    # Fetch lyrics from online db's (uses syncedlyrics library: https://github.com/lo3me/syncedlyrics)
     @staticmethod
-    def fetch_lyrics(track_name, artist_name):
+    def _get_uslt_lyrics(audio):
+        for key in audio.keys():
+            if key.startswith('USLT'):
+                return audio[key].text
+        return "Lyrics not available."
+
+    @staticmethod
+    def _get_sylt_lyrics(audio):
+        for key in audio.keys():
+            if key.startswith('SYLT'):
+                # TODO: Implement parsing for synchronized lyrics
+                return str(audio[key].data)
+        return "Lyrics not available."
+
+    # Fetch lyrics from an online database (uses syncedlyrics library: https://github.com/lo3me/syncedlyrics)
+    @staticmethod
+    def retrieve_lyrics_online(track_name, artist_name):
         try:
-            lrc = syncedlyrics.search(f"{track_name} {artist_name}")
-            if lrc:
-                # Process the lyrics to remove time codes
-                lines = lrc.split('\n')
-                cleaned_lyrics = []
-                for line in lines:
-                    # Remove the timestamp using a regular expression
-                    cleaned_line = re.sub(r'\[.*?\]', '', line).strip()
-                    if cleaned_line:
-                        cleaned_lyrics.append(cleaned_line)
-                return lrc, '\n'.join(cleaned_lyrics)  # Return both synced and unsynced lyrics
+            lrc_content = syncedlyrics.search(f"{track_name} {artist_name}")
+            if lrc_content:
+                return LyricsHandler._process_lrc_content(lrc_content)
             else:
                 return "Lyrics not found.", ""
         except Exception as e:
             return f"An error occurred: {e}", ""
+
+    @staticmethod
+    def _process_lrc_content(lrc_content):
+        lines = lrc_content.split('\n')
+        cleaned_lyrics = [re.sub(r'\[.*?\]', '', line).strip() for line in lines if line.strip()]
+        return lrc_content, '\n'.join(cleaned_lyrics)  # Return both synced and unsynced lyrics

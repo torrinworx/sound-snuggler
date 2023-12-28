@@ -1,5 +1,5 @@
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, USLT, SYLT
+from mutagen.id3 import ID3
 
 def display_embedded_lyrics(mp3_file_path):
     try:
