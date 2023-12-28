@@ -226,3 +226,5 @@ cython_debug/
 
 audio.*
 /models*
+*.flac
+*.mp3
