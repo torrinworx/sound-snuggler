@@ -81,9 +81,9 @@ class MusicPlayer(ttk.Frame):
             self.album_cover_label.image = photo
 
     def update_lyrics_display(self):
-        lyrics = LyricsHandler.get_embedded_lyrics_from_file(self.current_song)
+        lyrics = LyricsHandler.retrieve_lyrics_from_file(self.current_song)
         self.lyrics_display.delete(1.0, tk.END)
-        self.lyrics_display.insert(tk.END, lyrics if lyrics else "Lyrics not available.")
+        self.lyrics_display.insert(tk.END, lyrics["unsynced_lyrics"] if lyrics["unsynced_lyrics"] else "Lyrics not available.")
 
     def update_progress(self):
         if self.current_song:

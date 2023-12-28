@@ -183,7 +183,7 @@ class TranscriptionHandler:
         
         print(sylt_lyrics)
         audio.tags.delall('SYLT')
-        audio.tags.add(SYLT(encoding=Encoding.UTF8, lang='eng', format=2, type=1, desc='enhanced', text=sylt_lyrics))
+        audio.tags.add(SYLT(encoding=Encoding.UTF8, lang='eng', format=2, type=1, desc='enhanced', text=sylt_lyrics))  # NOTE: Might want to look into removing the "lang" and "desc" tags because that might be messing with Navidrome finding the USLT/SYLT tags idk
 
         # Save the tags
         audio.save()
