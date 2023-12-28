@@ -1,9 +1,10 @@
 import re
 
 import torch
+import mutagen
 import stable_whisper
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, USLT, SYLT, Encoding
+from mutagen.id3 import ID3, USLT, SYLT, Encoding, 
 
 from lyrics_handler import LyricsHandler
 from media_handler import MediaInfoHandler
@@ -26,7 +27,7 @@ class TranscriptionHandler:
 
         # NOTE: When implementing multi track/multi album transcripting, only load the model once.
     
-    def convert_and_transcribe(self, file_path):
+    def __call__(self, file_path):
         print("Starting conversion and transcription process...")
 
         # Convert FLAC to MP3 if necessary
@@ -165,68 +166,56 @@ class TranscriptionHandler:
         # Load the MP3 file
         audio = MP3(mp3_path, ID3=ID3)
 
-        # # Ensure that ID3 tags exist
-        # try:
-        #     audio.add_tags()
-        # except mutagen.id3.error:
-        #     pass  # ID3 tags already exist
+        # Load existing ID3 tags or create new ones if they don't exist
+        if audio.tags is None:
+            audio.add_tags()
 
         # Read the enhanced LRC file
         with open(enhanced_lrc_path, 'r', encoding='utf-8') as lrc_file:
             enhanced_lrc = lrc_file.read()
 
-        # Add the USLT tag (Unsynchronized lyrics)
+        # Add or update the USLT tag (Unsynchronized lyrics)
+        audio.tags.delall('USLT')
         audio.tags.add(USLT(encoding=Encoding.UTF8, lang='eng', desc='enhanced', text=enhanced_lrc))
 
-        # Add the SYLT tag (Synchronized lyrics)
-        # Note: You need to convert the LRC format to a format compatible with SYLT
-        # This is a simplified example, you will need to implement the conversion logic
+        # Add or update the SYLT tag (Synchronized lyrics)
         sylt_lyrics = self._convert_lrc_to_sylt_format(enhanced_lrc)
+        
+        print(sylt_lyrics)
+        audio.tags.delall('SYLT')
         audio.tags.add(SYLT(encoding=Encoding.UTF8, lang='eng', format=2, type=1, desc='enhanced', text=sylt_lyrics))
 
         # Save the tags
         audio.save()
         print(f"Lyrics embedded into {mp3_path} successfully.")
-    
-    def _convert_lrc_to_sylt_format(self, lrc_content):
-        """
-        Converts enhanced LRC content to SYLT format.
-        SYLT expects a byte string where each syllable (or word) is followed by its timestamp.
-        """
-        sylt_data = []
 
+    def _convert_lrc_to_sylt_format(self, lrc_content):
+        sylt_data = []
         for line in lrc_content.splitlines():
-            # Parse the LRC line format: [mm:ss.xx] lyrics
             parts = line.split(']', 1)
             if len(parts) < 2:
-                continue  # Skip invalid lines
+                continue
 
             timestamp, lyrics = parts
             timestamp = timestamp.strip('[')
             lyrics = lyrics.strip()
 
+            # Remove any bracketed timing information from the lyrics
+            lyrics = re.sub(r'\[.*?\]', '', lyrics)
+
             # Convert timestamp to milliseconds
-            time_parts = timestamp.split(':')
-            minutes, seconds = int(time_parts[0]), float(time_parts[1])
+            minutes, seconds = map(float, timestamp.split(':'))
             total_milliseconds = int((minutes * 60 + seconds) * 1000)
 
             # Add each word with its timestamp
-            for word in lyrics.split():
-                # SYLT format: (lyric, timestamp, duration, is_last_syllable)
-                # Here, we assume each word is a separate syllable and lasts for the entire line duration
-                sylt_data.append((word, total_milliseconds, 0, False))
+            words = lyrics.split()
+            for word in words:
+                # Each word followed by its timestamp
+                sylt_data.append((word, total_milliseconds))
 
-        # Convert the data to the byte string format required by SYLT
-        sylt_bytes = b''
-        for word, start_time, duration, is_last in sylt_data:
-            sylt_bytes += word.encode('utf-8') + b'\x00'  # Null-terminated UTF-8 string
-            sylt_bytes += start_time.to_bytes(4, 'big')  # Timestamp in milliseconds, big-endian
-            sylt_bytes += duration.to_bytes(3, 'big')  # Duration in milliseconds, big-endian
-            sylt_bytes += (1 if is_last else 0).to_bytes(1, 'big')  # Last syllable flag
-
-        return sylt_bytes
+        return sylt_data
 
 # Example usage
 flac_file_path = "./Green Day - American Idiot - 10 - Letterbomb.flac"
 transcription_handler = TranscriptionHandler()
-transcription_handler.convert_and_transcribe(flac_file_path)
+transcription_handler(flac_file_path)
