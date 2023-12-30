@@ -228,3 +228,4 @@ audio.*
 /models*
 *.flac
 *.mp3
+*.lrc

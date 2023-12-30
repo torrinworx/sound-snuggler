@@ -43,15 +43,18 @@ class TranscriptionHandler:
         print(f"Fetching lyrics for {track_name} by {artist_name}...")
         lyrics = LyricsHandler.search_lyrics_online(track_name, artist_name)
         processed_lyrics = lyrics["processed_lyrics"]
-        
+
+        # Extract base file name without extension
+        base_file_name = file_path.rsplit('.', 1)[0]  # Extract base file name
+
         if processed_lyrics:
-            self._align_and_transcribe(file_path, processed_lyrics)
+            self._align_and_transcribe(file_path, processed_lyrics, base_file_name)
         else:
-            self._transcribe(file_path)
+            self._transcribe(file_path, base_file_name)
 
         # Check if the file is an MP3 (after potential FLAC conversion)
         if file_path.lower().endswith('.mp3'):
-            enhanced_lrc_path = 'audio.enhanced.lrc'
+            enhanced_lrc_path = f'{base_file_name}.enhanced.lrc'  # Use base file name for naming
             self.embed_lyrics(file_path, enhanced_lrc_path, processed_lyrics)
         else:
             print("Embedding lyrics is only supported for MP3 files.")
@@ -69,7 +72,7 @@ class TranscriptionHandler:
                 return None
         return file_path
 
-    def _align_and_transcribe(self, file_path, lyrics):
+    def _align_and_transcribe(self, file_path, lyrics, base_file_name):
         # Remove line breaks, tabs, and other non-standard characters
         cleaned_lyrics = re.sub(r'[\r\n\t]+', ' ', lyrics)  # Replace line breaks and tabs with a space
         cleaned_lyrics = re.sub(r'[^\w\s]', '', cleaned_lyrics)  # Remove any non-alphanumeric characters except spaces
@@ -93,13 +96,14 @@ class TranscriptionHandler:
         # Saving the LRC and enhanced LRC content
         words = self._extract_words(result)
 
-        with open('audio.lrc', 'w') as lrc_file:
+        with open(f'{base_file_name}.lrc', 'w') as lrc_file:
             lrc_file.write(self._create_lrc(words))
 
-        with open('audio.enhanced.lrc', 'w') as enhanced_lrc_file:
-            enhanced_lrc_file.write( self._create_enhanced_lrc(words))
+        with open(f'{base_file_name}.enhanced.lrc', 'w') as enhanced_lrc_file:
+            enhanced_lrc_file.write(self._create_enhanced_lrc(words))
+
     
-    def _transcribe(self, file_path):
+    def _transcribe(self, file_path, base_file_name):
         print("Lyrics not found. Starting transcription without alignment...")
         result = self.model.transcribe(file_path)
         print("Transcription completed. Saving result...")
@@ -110,11 +114,12 @@ class TranscriptionHandler:
         # Saving the LRC and enhanced LRC content
         words = self._extract_words(result)
 
-        with open('audio.lrc', 'w') as lrc_file:
+        with open(f'{base_file_name}.lrc', 'w') as lrc_file:
             lrc_file.write(self._create_lrc(words))
 
-        with open('audio.enhanced.lrc', 'w') as enhanced_lrc_file:
-            enhanced_lrc_file.write( self._create_enhanced_lrc(words))
+        with open(f'{base_file_name}.enhanced.lrc', 'w') as enhanced_lrc_file:
+            enhanced_lrc_file.write(self._create_enhanced_lrc(words))
+
 
     def _extract_words(self, result):
         words = []
@@ -185,7 +190,7 @@ class TranscriptionHandler:
             lyrics = lyrics.strip()
 
             # Remove any bracketed timing information from the lyrics
-            lyrics = re.sub(r'\[.*?\]', '', lyrics)
+            lyrics = re.sub(r'\[[^\]]*\]', '', lyrics)
 
             # Convert timestamp to milliseconds
             minutes, seconds = map(float, timestamp.split(':'))
