@@ -1,7 +1,7 @@
 import re
+import random
 
 import torch
-import mutagen
 import stable_whisper
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, USLT, SYLT, Encoding
@@ -9,9 +9,11 @@ from mutagen.id3 import ID3, USLT, SYLT, Encoding
 from lyrics_handler import LyricsHandler
 from media_handler import MediaInfoHandler
 
+random.seed(0)
+
 
 class TranscriptionHandler:
-    def __init__(self, model_name='large', download_root='./models'):
+    def __init__(self, model_name='large-v3', download_root='./models'):
         # Check if CUDA is available, otherwise use CPU
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"Initializing with device: {device}")
@@ -39,17 +41,18 @@ class TranscriptionHandler:
         track_name, artist_name, _ = MediaInfoHandler.get_track_info(file_path)
 
         print(f"Fetching lyrics for {track_name} by {artist_name}...")
-        synced_lyrics, cleaned_lyrics = LyricsHandler.fetch_lyrics(track_name, artist_name)
-
-        if cleaned_lyrics:
-            self._align_and_transcribe(file_path, cleaned_lyrics)
+        lyrics = LyricsHandler.search_lyrics_online(track_name, artist_name)
+        processed_lyrics = lyrics["processed_lyrics"]
+        
+        if processed_lyrics:
+            self._align_and_transcribe(file_path, processed_lyrics)
         else:
             self._transcribe(file_path)
 
         # Check if the file is an MP3 (after potential FLAC conversion)
         if file_path.lower().endswith('.mp3'):
             enhanced_lrc_path = 'audio.enhanced.lrc'
-            self.embed_lyrics(file_path, enhanced_lrc_path, cleaned_lyrics)
+            self.embed_lyrics(file_path, enhanced_lrc_path, processed_lyrics)
         else:
             print("Embedding lyrics is only supported for MP3 files.")
 
@@ -67,98 +70,80 @@ class TranscriptionHandler:
         return file_path
 
     def _align_and_transcribe(self, file_path, lyrics):
-        print("Lyrics found. Starting alignment with audio...")
-        result = self.model.align(file_path, lyrics, language='en')
-        print("Alignment completed. Saving result as JSON...")
-        
-        # Manually specify the path if save_as_json doesn't return it
-        json_path = 'audio.json'
-        result.save_as_json(json_path)
-        result.to_srt_vtt('audio.srt', segment_level=False)
-        result.to_srt_vtt('audio.vtt', segment_level=False)
-        
-        srt_path = 'audio.srt'
-        self._convert_srt_to_lrc(srt_path, 'audio.lrc')
-        self._convert_srt_to_enhanced_lrc(srt_path, 'audio.enhanced.lrc')
+        # Remove line breaks, tabs, and other non-standard characters
+        cleaned_lyrics = re.sub(r'[\r\n\t]+', ' ', lyrics)  # Replace line breaks and tabs with a space
+        cleaned_lyrics = re.sub(r'[^\w\s]', '', cleaned_lyrics)  # Remove any non-alphanumeric characters except spaces
 
+        print("Lyrics found. Starting alignment with audio...")
+        result = self.model.align(
+            audio=file_path,
+            text=lyrics,
+            language='en',
+            vad=True,
+            demucs=True,
+            demucs_options=dict(shifts=5),
+            original_split=False,
+            regroup=True
+        )
+
+        print("Alignment completed. Saving result...")
+        
+        result.save_as_json('audio.json')
+    
+        # Saving the LRC and enhanced LRC content
+        words = self._extract_words(result)
+
+        with open('audio.lrc', 'w') as lrc_file:
+            lrc_file.write(self._create_lrc(words))
+
+        with open('audio.enhanced.lrc', 'w') as enhanced_lrc_file:
+            enhanced_lrc_file.write( self._create_enhanced_lrc(words))
+    
     def _transcribe(self, file_path):
         print("Lyrics not found. Starting transcription without alignment...")
         result = self.model.transcribe(file_path)
-        print("Transcription completed. Saving result as JSON...")
-        
+        print("Transcription completed. Saving result...")
+                
         # Manually specify the path if save_as_json doesn't return it
-        json_path = 'audio.json'
-        result.save_as_json(json_path)
-        result.to_srt_vtt('audio.srt', segment_level=False)
-        result.to_srt_vtt('audio.vtt', segment_level=False)
+        result.save_as_json('audio.json')
         
-        srt_path = 'audio.srt'
-        self._convert_srt_to_lrc(srt_path, 'audio.lrc')
-        self._convert_srt_to_enhanced_lrc(srt_path, 'audio.enhanced.lrc')
-    
-    def _clean_lyrics(self, line):
-        # Remove HTML tags and additional timestamps
-        line = re.sub(r'<[^>]+>', '', line)
-        line = re.sub(r'\[\d{2}:\d{2}\.\d{2}\]', '', line)
-        return line.strip()
+        # Saving the LRC and enhanced LRC content
+        words = self._extract_words(result)
 
-    def _convert_srt_to_lrc(self, srt_path, lrc_path):
-        with open(srt_path, 'r', encoding='utf-8') as srt_file:
-            srt_lines = srt_file.readlines()
+        with open('audio.lrc', 'w') as lrc_file:
+            lrc_file.write(self._create_lrc(words))
 
-        with open(lrc_path, 'w', encoding='utf-8') as lrc_file:
-            for line in srt_lines:
-                if '-->' in line:
-                    start_time = line.split('-->')[0].strip()
-                    # Convert time format from 'HH:MM:SS,MS' to 'MM:SS.xx'
-                    h, m, s_ms = start_time.split(':')
-                    s, ms = s_ms.split(',')
-                    lrc_time = f"[{int(m):02d}:{int(s):02d}.{int(ms)//10:02d}]"
-                elif line.strip() and not line.strip().isdigit():
-                    clean_line = self._clean_lyrics(line)
-                    if clean_line:  # Ensure the line is not empty and cleaned
-                        lrc_file.write(f"{lrc_time} {clean_line}\n")
+        with open('audio.enhanced.lrc', 'w') as enhanced_lrc_file:
+            enhanced_lrc_file.write( self._create_enhanced_lrc(words))
 
-    def _convert_srt_to_enhanced_lrc(self, srt_path, lrc_path):
-        with open(srt_path, 'r', encoding='utf-8') as srt_file:
-            srt_lines = srt_file.readlines()
+    def _extract_words(self, result):
+        words = []
+        for segment in result.segments:
+            words.extend(segment.words)
+        return words
 
-        lrc_start_time, lrc_end_time = "", ""
-        current_lyric_lines = []
-        with open(lrc_path, 'w', encoding='utf-8') as lrc_file:
-            for line in srt_lines:
-                if '-->' in line:
-                    # Write previous lyrics if any
-                    self._write_lyrics(lrc_file, current_lyric_lines, lrc_start_time, lrc_end_time)
-                    current_lyric_lines = []
+    def _create_lrc(self, words):
+        lrc_content = ""
+        for word_info in words:
+            start_time = self._format_time(word_info.start)
+            word = word_info.word.strip()
+            lrc_content += f"{start_time} {word}\n"
+        return lrc_content
 
-                    lrc_start_time, lrc_end_time = self._parse_srt_times(line)
-                elif line.strip() and not line.strip().isdigit():
-                    clean_line = self._clean_lyrics(line)
-                    if clean_line:
-                        current_lyric_lines.append(clean_line)
+    def _create_enhanced_lrc(self, words):
+        enhanced_lrc_content = ""
+        for word_info in words:
+            start_time = self._format_time(word_info.start)
+            end_time = self._format_time(word_info.end)
+            word = word_info.word.strip()
+            enhanced_lrc_content += f"{start_time} {end_time} {word}\n"
+        return enhanced_lrc_content
 
-            # Write any remaining lyrics after the loop ends
-            self._write_lyrics(lrc_file, current_lyric_lines, lrc_start_time, lrc_end_time)
-
-    def _parse_srt_times(self, line):
-        times = line.split('-->')
-        start_time = times[0].strip()
-        end_time = times[1].strip()
-
-        lrc_start_time = self._convert_time_to_lrc_format(start_time)
-        lrc_end_time = self._convert_time_to_lrc_format(end_time)
-
-        return lrc_start_time, lrc_end_time
-
-    def _convert_time_to_lrc_format(self, time_str):
-        h, m, s_ms = time_str.split(':')
-        s, ms = s_ms.split(',')
-        return f"[{int(m):02d}:{int(s):02d}.{int(ms)//10:02d}]"
-
-    def _write_lyrics(self, lrc_file, lyric_lines, start_time, end_time):
-        for lyric_line in lyric_lines:
-            lrc_file.write(f"{start_time}{lyric_line}{end_time}\n")
+    def _format_time(self, time_in_seconds):
+        minutes = int(time_in_seconds // 60)
+        seconds = int(time_in_seconds % 60)
+        milliseconds = int((time_in_seconds - int(time_in_seconds)) * 100)
+        return f"[{minutes:02d}:{seconds:02d}.{milliseconds:02d}]"
 
     def embed_lyrics(self, mp3_path, enhanced_lrc_path, cleaned_lyrics):
         print(f"Embedding lyrics into {mp3_path}...")
@@ -181,7 +166,6 @@ class TranscriptionHandler:
         # Add or update the SYLT tag (Synchronized lyrics)
         sylt_lyrics = self._convert_lrc_to_sylt_format(enhanced_lrc)
         
-        print(sylt_lyrics)
         audio.tags.delall('SYLT')
         audio.tags.add(SYLT(encoding=Encoding.UTF8, lang='eng', format=2, type=1, desc='enhanced', text=sylt_lyrics))  # NOTE: Might want to look into removing the "lang" and "desc" tags because that might be messing with Navidrome finding the USLT/SYLT tags idk
 

@@ -18,6 +18,7 @@ stable-ts = "*"
 torch = {version = "*", index = "downloadpytorch"}
 torchvision = {version = "*", index = "downloadpytorch"}
 torchaudio = {version = "*", index = "downloadpytorch"}
+demucs = "*"
 
 [dev-packages]
 
