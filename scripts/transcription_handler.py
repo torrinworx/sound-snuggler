@@ -4,6 +4,7 @@ import random
 import torch
 import stable_whisper
 from mutagen.mp3 import MP3
+from mutagen.flac import FLAC
 from mutagen.id3 import ID3, USLT, SYLT, Encoding
 
 from scripts.lyrics_handler import LyricsHandler
@@ -31,13 +32,6 @@ class TranscriptionHandler:
     
     def __call__(self, file_path):
         print("Starting conversion and transcription process...")
-
-        # Convert FLAC to MP3 if necessary
-        file_path = self._convert_if_flac(file_path)
-        if not file_path:
-            return
-
-        print("Extracting track name and artist name...")
         track_name, artist_name, _ = MediaInfoHandler.get_track_info(file_path)
 
         print(f"Fetching lyrics for {track_name} by {artist_name}...")
@@ -51,32 +45,17 @@ class TranscriptionHandler:
             self._align_and_transcribe(file_path, processed_lyrics, base_file_name)
         else:
             self._transcribe(file_path, base_file_name)
-
-        # Check if the file is an MP3 (after potential FLAC conversion)
+        print("Moving on to embedding the lyrics")
+        enhanced_lrc_path = f'{base_file_name}.enhanced.lrc'
         if file_path.lower().endswith('.mp3'):
-            enhanced_lrc_path = f'{base_file_name}.enhanced.lrc'  # Use base file name for naming
-            self.embed_lyrics(file_path, enhanced_lrc_path, processed_lyrics)
+            self._embed_lyrics(file_path, enhanced_lrc_path, processed_lyrics)
+        if file_path.lower().endswith('.flac'):
+            self._embed_lyrics(file_path, enhanced_lrc_path, processed_lyrics)
+
         else:
             print("Embedding lyrics is only supported for MP3 files.")
 
-    def _convert_if_flac(self, file_path):
-        # Flac files do not support embeded lyrics to my knowledge.
-        if file_path.lower().endswith('.flac'):
-            print("FLAC file detected. Starting conversion to MP3...")
-            mp3_path = file_path.rsplit('.', 1)[0] + '.mp3'
-            if MediaInfoHandler.convert_flac_to_mp3(file_path, mp3_path):
-                print("FLAC file successfully converted to MP3.")
-                return mp3_path
-            else:
-                print("Error converting FLAC to MP3.")
-                return None
-        return file_path
-
     def _align_and_transcribe(self, file_path, lyrics, base_file_name):
-        # Remove line breaks, tabs, and other non-standard characters
-        # cleaned_lyrics = re.sub(r'[\r\n\t]+', ' ', lyrics)  # Replace line breaks and tabs with a space
-        # cleaned_lyrics = re.sub(r'[^\w\s]', '', cleaned_lyrics)  # Remove any non-alphanumeric characters except spaces
-
         print("Lyrics found. Starting alignment with audio...")
         result = self.model.align(
             audio=file_path,
@@ -84,7 +63,7 @@ class TranscriptionHandler:
             language='en',
             vad=True,
             demucs=True,
-            demucs_options=dict(shifts=5),
+            demucs_options=dict(shifts=2),
             original_split=True,
             regroup=True,
             suppress_silence=True,
@@ -153,33 +132,34 @@ class TranscriptionHandler:
         milliseconds = int((time_in_seconds - int(time_in_seconds)) * 100)
         return f"[{minutes:02d}:{seconds:02d}.{milliseconds:02d}]"
 
-    def embed_lyrics(self, mp3_path, enhanced_lrc_path, cleaned_lyrics):
-        print(f"Embedding lyrics into {mp3_path}...")
+    def _embed_lyrics(self, file_path, enhanced_lrc_path, cleaned_lyrics):
+        if file_path.lower().endswith('.mp3'):
+            print(f"Embedding lyrics into {file_path} (MP3)...")
+            audio = MP3(file_path, ID3=ID3)
+            if audio.tags is None:
+                audio.add_tags()
 
-        # Load the MP3 file
-        audio = MP3(mp3_path, ID3=ID3)
+            with open(enhanced_lrc_path, 'r', encoding='utf-8') as lrc_file:
+                enhanced_lrc = lrc_file.read()
 
-        # Load existing ID3 tags or create new ones if they don't exist
-        if audio.tags is None:
-            audio.add_tags()
+            audio.tags.delall('USLT')
+            audio.tags.add(USLT(encoding=Encoding.UTF8, lang='eng', desc='enhanced', text=cleaned_lyrics))
 
-        # Read the enhanced LRC file
-        with open(enhanced_lrc_path, 'r', encoding='utf-8') as lrc_file:
-            enhanced_lrc = lrc_file.read()
+            sylt_lyrics = self._convert_lrc_to_sylt_format(enhanced_lrc)
+            audio.tags.delall('SYLT')
+            audio.tags.add(SYLT(encoding=Encoding.UTF8, lang='eng', format=2, type=1, desc='enhanced', text=sylt_lyrics))
 
-        # Add or update the USLT tag (Unsynchronized lyrics)
-        audio.tags.delall('USLT')
-        audio.tags.add(USLT(encoding=Encoding.UTF8, lang='eng', desc='enhanced', text=cleaned_lyrics))
-
-        # Add or update the SYLT tag (Synchronized lyrics)
-        sylt_lyrics = self._convert_lrc_to_sylt_format(enhanced_lrc)
+            audio.save()
+            print(f"Lyrics embedded into {file_path} successfully.")
         
-        audio.tags.delall('SYLT')
-        audio.tags.add(SYLT(encoding=Encoding.UTF8, lang='eng', format=2, type=1, desc='enhanced', text=sylt_lyrics))  # NOTE: Might want to look into removing the "lang" and "desc" tags because that might be messing with Navidrome finding the USLT/SYLT tags idk
+        elif file_path.lower().endswith('.flac'):
+            print(f"Embedding unsynchronized lyrics into {file_path} (FLAC)...")
+            audio = FLAC(file_path)
 
-        # Save the tags
-        audio.save()
-        print(f"Lyrics embedded into {mp3_path} successfully.")
+            # Embedding unsynchronized lyrics as a Vorbis comment
+            audio['LYRICS'] = cleaned_lyrics
+            audio.save()
+            print(f"Unsynchronized lyrics embedded into {file_path} successfully.")
 
     def _convert_lrc_to_sylt_format(self, lrc_content):
         sylt_data = []
@@ -206,8 +186,3 @@ class TranscriptionHandler:
                 sylt_data.append((word, total_milliseconds))
 
         return sylt_data
-
-# Example usage
-# flac_file_path = "./Green Day - American Idiot - 10 - Letterbomb.flac"
-# transcription_handler = TranscriptionHandler()
-# transcription_handler(flac_file_path)

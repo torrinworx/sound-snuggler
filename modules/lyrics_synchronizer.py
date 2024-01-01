@@ -68,6 +68,7 @@ class LyricsSynchronizer(tk.Frame):
             self._update_lyrics_display(lyrics_data)
         except Exception as e:
             self._stop_loading()
+            print(f"Error during transcription: {e}")
             messagebox.showerror("Error", f"An error occurred during transcription: {e}")
 
     def _update_lyrics_display(self, lyrics_data):
