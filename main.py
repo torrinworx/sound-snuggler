@@ -8,7 +8,7 @@ class MainApplication(tk.Tk):
         super().__init__()
 
         self.title("Music Player with Lyrics")
-        self.geometry("800x600")
+        self.geometry("800x800")
 
         self.create_widgets()
 
