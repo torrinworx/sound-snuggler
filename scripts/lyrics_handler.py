@@ -37,7 +37,6 @@ class LyricsHandler:
 
         except Exception as e:
             return {"error": f"Error extracting lyrics: {e}"}
-
         return lyrics_data
 
     @staticmethod
