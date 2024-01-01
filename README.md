@@ -44,3 +44,9 @@ py ./main.py
 - ffmpeg
 - vlc
 - torch version, cpu, rocm, or cuda, depending on your hardware: https://pytorch.org/get-started/locally/ (Still need to automate this installation/setup with a script or something)
+
+# Keep an eye on these issues for updates on lyrics support:
+
+https://github.com/jeffvli/feishin/issues/52
+
+https://github.com/navidrome/navidrome/pull/2656
