@@ -17,26 +17,19 @@ class LyricsHandler:
             "synced_lyrics": None
         }
         
-        # Check for enhanced LRC file
-        enhanced_lrc_path = file_path.rsplit('.', 1)[0] + '.enhanced.lrc'
-        if os.path.exists(enhanced_lrc_path):
-            with open(enhanced_lrc_path, 'r') as file:
-                lyrics_data["synced_lyrics"] = file.read()
-            print(lyrics_data)
-            return lyrics_data
-        
         try:
             if file_path.lower().endswith('.mp3'):
                 audio = MP3(file_path, ID3=ID3)
 
-                # Print all tag keys for diagnostic purposes
-                print("Available tags in the file:", audio.keys())
-
-                # Retrieve unsynchronized lyrics (USLT)
+                # Retrieve unsynchronized lyrics
                 lyrics_data["unsynced_lyrics"] = LyricsHandler._retrieve_unsynced_lyrics(audio)
-
-                # Retrieve synchronized lyrics (SYLT)
-                lyrics_data["synced_lyrics"] = LyricsHandler._retrieve_synced_lyrics(audio)
+                
+                # Try to retrieve synced lyrics from enhanced LRC file
+                lyrics_data["synced_lyrics"] = LyricsHandler._retrieve_enhanced_lrc_lyrics(file_path)
+                
+                # If no external synced lyrics found, search internally
+                if not lyrics_data["synced_lyrics"]:
+                    lyrics_data["synced_lyrics"] = LyricsHandler._retrieve_synced_lyrics(audio)
 
             elif file_path.lower().endswith('.flac'):
                 # Future implementation for FLAC files
@@ -46,6 +39,14 @@ class LyricsHandler:
             return {"error": f"Error extracting lyrics: {e}"}
 
         return lyrics_data
+
+    @staticmethod
+    def _retrieve_enhanced_lrc_lyrics(file_path):
+        enhanced_lrc_path = file_path.rsplit('.', 1)[0] + '.enhanced.lrc'
+        if os.path.exists(enhanced_lrc_path):
+            with open(enhanced_lrc_path, 'r') as file:
+                return file.read()
+        return None
 
     @staticmethod
     def _retrieve_unsynced_lyrics(audio):
@@ -76,9 +77,8 @@ class LyricsHandler:
     @staticmethod
     def _process_online_lyrics(online_lyrics):
         lines = online_lyrics.split('\n')
-        processed_lyrics = [re.sub(r'\[.*?\]', '', line).strip() for line in lines if line.strip()]
+        processed_lyrics = [re.sub(r'\[[^\]]*\]', '', line).strip() for line in lines if line.strip()]
         return {
             "original_lyrics": online_lyrics, 
             "processed_lyrics": '\n'.join(processed_lyrics)
-        }  # Return both original and processed lyrics
-
+        }

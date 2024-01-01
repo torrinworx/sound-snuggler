@@ -83,6 +83,7 @@ class MusicPlayer(ttk.Frame):
     def update_lyrics_display(self):
         lyrics = LyricsHandler.retrieve_lyrics_from_file(self.current_song)
         self.lyrics_display.delete(1.0, tk.END)
+        print(lyrics)
         self.lyrics_display.insert(tk.END, lyrics["unsynced_lyrics"] if lyrics["unsynced_lyrics"] else "Lyrics not available.")
         self.synced_lyrics = self.parse_synced_lyrics(lyrics["synced_lyrics"])
 
@@ -108,7 +109,6 @@ class MusicPlayer(ttk.Frame):
 
                 parsed_synced_lyrics.append((start_time_ms, end_time_ms, text))
 
-        print("Parsed Synced Lyrics:", parsed_synced_lyrics)  # Debugging print
         return parsed_synced_lyrics
 
     def update_synced_lyrics_display(self, current_time):
@@ -118,13 +118,12 @@ class MusicPlayer(ttk.Frame):
 
         current_text = ""
         for start_time, end_time, text in self.synced_lyrics:
-            print(f"Checking lyric: {text} for time range {start_time} - {end_time}")  # Debugging print
             if current_time >= start_time and (end_time is None or current_time < end_time):
                 current_text = text
                 break
 
         self.sync_lyrics_display.config(text=current_text)
-        print("Current Synced Lyric:", current_text, "at time:", current_time)  # Debugging print
+        print("\nCurrent Synced Lyric:", current_text, "\ntime:", current_time, "\n")  # Debugging
 
     def update_progress(self):
         if not self.current_song:
@@ -132,7 +131,6 @@ class MusicPlayer(ttk.Frame):
 
         try:
             current_time = self.player.get_time()
-            print("Current time:", current_time)  # Debugging print
 
             total_time = self.time_slider.cget("to") * 1000
             self.time_slider.set(current_time / 1000)
