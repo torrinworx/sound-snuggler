@@ -1,7 +1,9 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, scrolledtext
+import re
+
 import vlc
+import tkinter as tk
 from PIL import Image, ImageTk
+from tkinter import ttk, filedialog, scrolledtext
 
 from scripts.lyrics_handler import LyricsHandler
 from scripts.media_handler import MediaInfoHandler
@@ -86,23 +88,27 @@ class MusicPlayer(ttk.Frame):
 
     def parse_synced_lyrics(self, synced_lyrics_raw):
         parsed_synced_lyrics = []
-        for line in synced_lyrics_raw.split('\n'):
+        lines = synced_lyrics_raw.split('\n')
+        for line in lines:
+            # Find all timestamps and text in the line
+            parts = re.findall(r'\[\d\d:\d\d\.\d\d\]|\S+', line)
 
-            # Splitting the line into timestamp and text
-            if ']: ' in line:
-                timestamp_str, text = line.split(']: ', 1)
-                timestamp_str = timestamp_str.strip('[]ms')
+            # Check if line has at least two timestamps and text
+            if len(parts) >= 3 and re.match(r'\[\d\d:\d\d\.\d\d\]', parts[0]) and re.match(r'\[\d\d:\d\d\.\d\d\]', parts[1]):
+                start_time_str = parts[0].strip('[]')
+                end_time_str = parts[1].strip('[]')
 
-                if timestamp_str.isdigit():
-                    time_ms = int(timestamp_str)
-                    parsed_synced_lyrics.append((time_ms, text))
-                else:
-                    # Debugging print in case of parsing issue
-                    print("Timestamp not a digit:", timestamp_str)
-            else:
-                # Debugging print in case line format is not as expected
-                print("Incorrect line format:", line)
+                start_minutes, start_seconds = map(float, start_time_str.split(':'))
+                start_time_ms = int((start_minutes * 60 + start_seconds) * 1000)
 
+                end_minutes, end_seconds = map(float, end_time_str.split(':'))
+                end_time_ms = int((end_minutes * 60 + end_seconds) * 1000)
+
+                text = ' '.join(parts[2:])  # Join remaining parts as text
+
+                parsed_synced_lyrics.append((start_time_ms, end_time_ms, text))
+
+        print("Parsed Synced Lyrics:", parsed_synced_lyrics)  # Debugging print
         return parsed_synced_lyrics
 
     def update_synced_lyrics_display(self, current_time):
@@ -111,19 +117,14 @@ class MusicPlayer(ttk.Frame):
             return
 
         current_text = ""
-        next_lyric_time = None
-        for index, (time, text) in enumerate(self.synced_lyrics):
-            if current_time >= time:
+        for start_time, end_time, text in self.synced_lyrics:
+            print(f"Checking lyric: {text} for time range {start_time} - {end_time}")  # Debugging print
+            if current_time >= start_time and (end_time is None or current_time < end_time):
                 current_text = text
-                next_lyric_time = self.synced_lyrics[index + 1][0] if index + 1 < len(self.synced_lyrics) else None
-            else:
                 break
 
-        if next_lyric_time and current_time >= next_lyric_time:
-            current_text = ""  # Clear the text if the current time has surpassed the next lyric time
-
         self.sync_lyrics_display.config(text=current_text)
-        print("Current Synced Lyric:", current_text)  # Debugging print
+        print("Current Synced Lyric:", current_text, "at time:", current_time)  # Debugging print
 
     def update_progress(self):
         if not self.current_song:
@@ -131,6 +132,7 @@ class MusicPlayer(ttk.Frame):
 
         try:
             current_time = self.player.get_time()
+            print("Current time:", current_time)  # Debugging print
 
             total_time = self.time_slider.cget("to") * 1000
             self.time_slider.set(current_time / 1000)

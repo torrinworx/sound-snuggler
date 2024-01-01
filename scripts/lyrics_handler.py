@@ -1,4 +1,6 @@
+import os
 import re
+
 import syncedlyrics
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
@@ -14,6 +16,15 @@ class LyricsHandler:
             "unsynced_lyrics": None,
             "synced_lyrics": None
         }
+        
+        # Check for enhanced LRC file
+        enhanced_lrc_path = file_path.rsplit('.', 1)[0] + '.enhanced.lrc'
+        if os.path.exists(enhanced_lrc_path):
+            with open(enhanced_lrc_path, 'r') as file:
+                lyrics_data["synced_lyrics"] = file.read()
+            print(lyrics_data)
+            return lyrics_data
+        
         try:
             if file_path.lower().endswith('.mp3'):
                 audio = MP3(file_path, ID3=ID3)

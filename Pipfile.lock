@@ -1062,11 +1062,11 @@
         },
         "stable-ts": {
             "hashes": [
-                "sha256:e9d9bb086850cc03279f41b68d5027a51dafd4d64b2bbac30cdf534f07029e42"
+                "sha256:5b4e1135cb6b6256045f93ce87d6c03e3d8c647428e104523ba482f08d36bbd4"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.8'",
-            "version": "==2.14.1"
+            "version": "==2.14.2"
         },
         "submitit": {
             "hashes": [

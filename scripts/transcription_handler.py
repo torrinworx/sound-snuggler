@@ -13,7 +13,7 @@ random.seed(0)
 
 
 class TranscriptionHandler:
-    def __init__(self, model_name='large-v3', download_root='./models'):
+    def __init__(self, model_name='base', download_root='./models'):
         # Check if CUDA is available, otherwise use CPU
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"Initializing with device: {device}")
@@ -74,8 +74,8 @@ class TranscriptionHandler:
 
     def _align_and_transcribe(self, file_path, lyrics, base_file_name):
         # Remove line breaks, tabs, and other non-standard characters
-        cleaned_lyrics = re.sub(r'[\r\n\t]+', ' ', lyrics)  # Replace line breaks and tabs with a space
-        cleaned_lyrics = re.sub(r'[^\w\s]', '', cleaned_lyrics)  # Remove any non-alphanumeric characters except spaces
+        # cleaned_lyrics = re.sub(r'[\r\n\t]+', ' ', lyrics)  # Replace line breaks and tabs with a space
+        # cleaned_lyrics = re.sub(r'[^\w\s]', '', cleaned_lyrics)  # Remove any non-alphanumeric characters except spaces
 
         print("Lyrics found. Starting alignment with audio...")
         result = self.model.align(
@@ -85,8 +85,10 @@ class TranscriptionHandler:
             vad=True,
             demucs=True,
             demucs_options=dict(shifts=5),
-            original_split=False,
-            regroup=True
+            original_split=True,
+            regroup=True,
+            suppress_silence=True,
+            suppress_word_ts=False,
         )
 
         print("Alignment completed. Saving result...")
@@ -101,11 +103,13 @@ class TranscriptionHandler:
 
         with open(f'{base_file_name}.enhanced.lrc', 'w') as enhanced_lrc_file:
             enhanced_lrc_file.write(self._create_enhanced_lrc(words))
-
     
     def _transcribe(self, file_path, base_file_name):
         print("Lyrics not found. Starting transcription without alignment...")
-        result = self.model.transcribe(file_path)
+        result = self.model.transcribe(
+            audio=file_path,
+            word_timestamps=True,
+        )
         print("Transcription completed. Saving result...")
                 
         # Manually specify the path if save_as_json doesn't return it
@@ -119,7 +123,6 @@ class TranscriptionHandler:
 
         with open(f'{base_file_name}.enhanced.lrc', 'w') as enhanced_lrc_file:
             enhanced_lrc_file.write(self._create_enhanced_lrc(words))
-
 
     def _extract_words(self, result):
         words = []
