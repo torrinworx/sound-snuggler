@@ -4,6 +4,7 @@ import re
 import syncedlyrics
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3
+from mutagen.flac import FLAC
 
 class LyricsHandler:
     # For retrieving lyrics embedded in a music file
@@ -32,12 +33,27 @@ class LyricsHandler:
                     lyrics_data["synced_lyrics"] = LyricsHandler._retrieve_synced_lyrics(audio)
 
             elif file_path.lower().endswith('.flac'):
-                # Future implementation for FLAC files
-                pass
+                audio = FLAC(file_path)
+
+                # Retrieve lyrics from Vorbis comments
+                lyrics_data["unsynced_lyrics"] = LyricsHandler._retrieve_lyrics_from_flac(audio)
+
+                # Synced lyrics handling (if applicable)
+                # FLAC doesn't support SYLT, so you might use external .lrc files
+                lyrics_data["synced_lyrics"] = LyricsHandler._retrieve_enhanced_lrc_lyrics(file_path)
+
 
         except Exception as e:
             return {"error": f"Error extracting lyrics: {e}"}
         return lyrics_data
+    
+    @staticmethod
+    def _retrieve_lyrics_from_flac(audio):
+        # In Vorbis comments, lyrics might be under a 'LYRICS' tag
+        # This can vary, so you might need to adjust based on your files
+        if 'LYRICS' in audio:
+            return audio['LYRICS'][0]
+        return None
 
     @staticmethod
     def _retrieve_enhanced_lrc_lyrics(file_path):
