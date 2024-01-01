@@ -6,8 +6,8 @@ import stable_whisper
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, USLT, SYLT, Encoding
 
-from lyrics_handler import LyricsHandler
-from media_handler import MediaInfoHandler
+from scripts.lyrics_handler import LyricsHandler
+from scripts.media_handler import MediaInfoHandler
 
 random.seed(0) # Setting seed so model is deterministic for each run with repeatable results.
 
@@ -208,6 +208,6 @@ class TranscriptionHandler:
         return sylt_data
 
 # Example usage
-flac_file_path = "./Green Day - American Idiot - 10 - Letterbomb.flac"
-transcription_handler = TranscriptionHandler()
-transcription_handler(flac_file_path)
+# flac_file_path = "./Green Day - American Idiot - 10 - Letterbomb.flac"
+# transcription_handler = TranscriptionHandler()
+# transcription_handler(flac_file_path)
