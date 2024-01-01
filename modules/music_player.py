@@ -83,7 +83,6 @@ class MusicPlayer(ttk.Frame):
     def update_lyrics_display(self):
         lyrics = LyricsHandler.retrieve_lyrics_from_file(self.current_song)
         self.lyrics_display.delete(1.0, tk.END)
-        print(lyrics)
         self.lyrics_display.insert(tk.END, lyrics["unsynced_lyrics"] if lyrics["unsynced_lyrics"] else "Lyrics not available.")
         self.synced_lyrics = self.parse_synced_lyrics(lyrics["synced_lyrics"])
 
@@ -123,7 +122,6 @@ class MusicPlayer(ttk.Frame):
                 break
 
         self.sync_lyrics_display.config(text=current_text)
-        print("\nCurrent Synced Lyric:", current_text, "\ntime:", current_time, "\n")  # Debugging
 
     def update_progress(self):
         if not self.current_song:
